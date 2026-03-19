@@ -1,4 +1,4 @@
-# split-mov
+# MOVsplitter
 
 ## プロジェクト概要
 Now Loadingの画面と曲タイトル表示を検知してNow Loadingを削除しつつ分割します。
