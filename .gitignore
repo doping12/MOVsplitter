@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# testdata
+testdata/
+tests/
+split_mov_*/
+AGENTS.md
+.pytest_cache/
+.DS_Store

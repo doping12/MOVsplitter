@@ -1,0 +1,59 @@
+# 3 steps bounds detecting, range -> bounds -> refine bounds
+coarse_sample_fps: 2.0
+coarse_skip_after_loading_sec: 100.0
+coarse_boundary_sample_fps: 2.0
+refine_sample_fps: 60.0
+refine_window_sec: 2.5
+refine_parallel_workers: 8
+brightness_change_threshold: 0.18
+histogram_diff_threshold: 0.20
+ssim_threshold: 0.93
+low_information_threshold: 22.0
+color_std_threshold: 30.0
+frame_diff_threshold: 0.025
+
+freeze_min_duration_sec: 1.2
+loading_min_duration_sec: 1.8
+merge_gap_sec: 0.8
+min_segment_sec: 3.0
+loading_score_threshold: 3
+smoothing_window_sec: 0.8
+
+dark_brightness_threshold: 35.0
+bright_brightness_threshold: 220.0
+
+use_template_matching: true
+loading_template_path: loading/loading.mov
+title_template_path: loading/title.MOV
+template_ignore_edge_sec: 0.5
+template_similarity_threshold: 0.62
+template_strict_similarity_threshold: 0.82
+title_template_similarity_threshold: 0.58
+title_template_strict_similarity_threshold: 0.78
+
+center_white_ratio_threshold: 0.010
+center_edge_ratio_threshold: 0.010
+center_outer_contrast_threshold: 4.0
+title_dark_brightness_threshold: 120.0
+
+# head settings
+head_edge_refine_enabled: true
+head_loading_window_sec: 3.0
+head_min_stable_sec: 0.75
+head_density_threshold: 0.70
+head_template_similarity_threshold: 0.48
+head_jump_min_score: 3
+head_jump_delta: 2
+head_fine_tune_frame_offset: 3
+
+# tail settings
+tail_edge_refine_enabled: true
+tail_loading_window_sec: 3.0
+tail_min_stable_sec: 0.75
+tail_density_threshold: 0.70
+tail_template_similarity_threshold: 0.48
+tail_jump_min_score: 3
+tail_jump_delta: 2
+tail_fine_tune_frame_offset: -3
+
+copy_cut_tolerance_sec: 0.35

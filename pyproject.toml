@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "split-mov"
+version = "0.1.0"
+description = "Rule-based loading-screen detector and MOV/MP4 splitter"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "matplotlib>=3.8",
+  "opencv-python-headless>=4.9",
+  "PyYAML>=6.0",
+  "scikit-image>=0.22",
+]
+
+[project.optional-dependencies]
+ai = [
+  "onnxruntime>=1.17",
+]
+test = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+split-mov = "split_mov.cli:main"
+
+[tool.setuptools]
+packages = ["split_mov"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
