@@ -61,6 +61,13 @@ class TemplateProfile:
     stds: dict[str, float]
 
 
+@dataclass(slots=True)
+class CoarseSkipEvent:
+    run_start_sec: float
+    trigger_sec: float
+    resume_sec: float
+
+
 def _template_profile_to_dict(profile: TemplateProfile) -> dict[str, dict[str, float]]:
     return {"means": profile.means, "stds": profile.stds}
 
@@ -264,7 +271,7 @@ def _extract_coarse_features_with_loading_skip(
     cfg: DetectionConfig,
     template_profile: TemplateProfile | None,
     title_template_profile: TemplateProfile | None,
-) -> tuple[list[FrameMetrics], float]:
+) -> tuple[list[FrameMetrics], float, list[CoarseSkipEvent]]:
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"動画を開けません: {video_path}")
@@ -284,7 +291,9 @@ def _extract_coarse_features_with_loading_skip(
 
     frame_idx = 0
     run_len = 0
+    run_start_sec = 0.0
     skip_count = 0
+    skip_events: list[CoarseSkipEvent] = []
 
     while True:
         ok = cap.grab()
@@ -349,6 +358,8 @@ def _extract_coarse_features_with_loading_skip(
             loading_hit = (score >= cfg.loading_score_threshold) or flags["title_like"]
 
         if loading_hit:
+            if run_len == 0:
+                run_start_sec = time_sec
             run_len += 1
         else:
             run_len = 0
@@ -357,6 +368,13 @@ def _extract_coarse_features_with_loading_skip(
             target_sec = time_sec + skip_sec
             if duration > 0:
                 target_sec = min(target_sec, duration)
+            skip_events.append(
+                CoarseSkipEvent(
+                    run_start_sec=float(run_start_sec),
+                    trigger_sec=float(time_sec),
+                    resume_sec=float(target_sec),
+                )
+            )
             cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, target_sec) * 1000.0)
             frame_idx = int(round(max(0.0, target_sec) * native_fps))
             prev_frame = None
@@ -379,7 +397,21 @@ def _extract_coarse_features_with_loading_skip(
             skip_count,
             skip_sec,
         )
-    return metrics, duration
+    return metrics, duration, skip_events
+
+
+def _merge_metrics_by_time(base: list[FrameMetrics], extra: list[FrameMetrics], tolerance_sec: float) -> list[FrameMetrics]:
+    all_m = sorted([*base, *extra], key=lambda x: x.time_sec)
+    if not all_m:
+        return []
+    out: list[FrameMetrics] = []
+    last_t = None
+    tol = max(1e-6, float(tolerance_sec))
+    for m in all_m:
+        if last_t is None or abs(m.time_sec - last_t) > tol:
+            out.append(m)
+            last_t = m.time_sec
+    return out
 
 
 def detect_loading_ranges_from_metrics(
@@ -829,13 +861,34 @@ def detect_loading_ranges(
         title_template_profile = _load_template_profile(cfg, "title")
 
     # テンプレ構築後にcoarse抽出を再実行し、テンプレ条件込みでのloading後スキップを反映
-    metrics, duration = _extract_coarse_features_with_loading_skip(
+    metrics, duration, skip_events = _extract_coarse_features_with_loading_skip(
         video_path=video_path,
         sample_fps=coarse_fps,
         cfg=cfg,
         template_profile=template_profile,
         title_template_profile=title_template_profile,
     )
+    if skip_events and float(cfg.coarse_skip_verify_window_sec) > 0.0:
+        verify_w = float(cfg.coarse_skip_verify_window_sec)
+        verify_fps = float(cfg.coarse_boundary_sample_fps)
+        extra: list[FrameMetrics] = []
+        for ev in skip_events:
+            lo1 = max(0.0, ev.run_start_sec - verify_w)
+            hi1 = min(duration, ev.trigger_sec + verify_w) if duration > 0 else (ev.trigger_sec + verify_w)
+            m1, _ = extract_sampled_features_window(video_path, verify_fps, lo1, hi1)
+            extra.extend(m1)
+            lo2 = max(0.0, ev.resume_sec - verify_w)
+            hi2 = min(duration, ev.resume_sec + verify_w) if duration > 0 else (ev.resume_sec + verify_w)
+            m2, _ = extract_sampled_features_window(video_path, verify_fps, lo2, hi2)
+            extra.extend(m2)
+        metrics = _merge_metrics_by_time(metrics, extra, tolerance_sec=0.5 / max(verify_fps, 1e-6))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "coarse skip verify events=%d extra_samples=%d merged_samples=%d",
+                len(skip_events),
+                len(extra),
+                len(metrics),
+            )
     result = detect_loading_ranges_from_metrics(
         metrics,
         duration,

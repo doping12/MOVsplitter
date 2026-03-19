@@ -12,6 +12,7 @@ import yaml
 class DetectionConfig:
     coarse_sample_fps: float = 4.0
     coarse_skip_after_loading_sec: float = 100.0
+    coarse_skip_verify_window_sec: float = 2.0
     coarse_boundary_sample_fps: float = 12.0
     refine_sample_fps: float = 60.0
     refine_window_sec: float = 2.0

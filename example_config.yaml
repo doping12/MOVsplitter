@@ -1,6 +1,7 @@
 # 3 steps bounds detecting, range -> bounds -> refine bounds
 coarse_sample_fps: 2.0
-coarse_skip_after_loading_sec: 0
+coarse_skip_after_loading_sec: 100
+coarse_skip_verify_window_sec: 2.0
 coarse_boundary_sample_fps: 2.0
 refine_sample_fps: 60.0
 refine_window_sec: 2.5
