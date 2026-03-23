@@ -196,6 +196,7 @@ config用のYAMLを書き換えて調整します。
 - `--title-frame-offset-sec`: タイトルOCRに使う基準時刻オフセット秒
 - `--title-ocr-lang`: OCR言語（例: `jpn+eng`, `eng`）
 - `--title-ocr-psm`: OCRのPSM指定
+- `--title-ocr-backend`: タイトルOCRバックエンド（`tesseract` / `easyocr`）
 - `--parallel`: 切り出し並列数
 - `--config`: 設定YAML/JSONのパス
 - `--min-segment-sec`: `min_segment_sec`をCLIから一時上書き

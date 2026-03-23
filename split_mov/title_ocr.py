@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from threading import Lock
 
 import cv2
 import numpy as np
@@ -97,6 +98,48 @@ class OCRResult:
     confidence: float
 
 
+_EASYOCR_READERS: dict[tuple[str, ...], object] = {}
+_EASYOCR_LOCK = Lock()
+
+
+def _lang_to_easyocr(lang: str) -> list[str]:
+    m = {
+        "jpn": "ja",
+        "eng": "en",
+        "jpn+eng": ("ja", "en"),
+    }
+    if lang in m:
+        v = m[lang]
+        return list(v) if isinstance(v, tuple) else [v]
+    out: list[str] = []
+    for token in lang.split("+"):
+        token = token.strip()
+        if not token:
+            continue
+        if token == "jpn":
+            out.append("ja")
+        elif token == "eng":
+            out.append("en")
+        else:
+            out.append(token)
+    return out or ["en"]
+
+
+def _get_easyocr_reader(lang: str):
+    try:
+        import easyocr
+    except Exception as e:
+        raise RuntimeError("easyocr backendが指定されましたが easyocr が導入されていません") from e
+    langs = tuple(_lang_to_easyocr(lang))
+    with _EASYOCR_LOCK:
+        reader = _EASYOCR_READERS.get(langs)
+        if reader is not None:
+            return reader
+        reader = easyocr.Reader(list(langs), gpu=False, verbose=False)
+        _EASYOCR_READERS[langs] = reader
+        return reader
+
+
 def _clean_ocr_text(text: str) -> str:
     lines = [ln.strip() for ln in text.replace("\r", "\n").split("\n")]
     candidates: list[str] = []
@@ -169,11 +212,6 @@ def _text_quality(text: str) -> float:
     return base - max(0, len(text) - 28) * 2.0
 
 
-def _ocr_with_pytesseract(img, lang: str, psm: int) -> OCRResult | None:
-    # 安定性優先: CLI版tesseractを使用するため、pytesseract経由は無効化
-    return None
-
-
 def _ocr_with_tesseract_cli(img, lang: str, psm: int) -> OCRResult | None:
     if shutil.which("tesseract") is None:
         return None
@@ -207,13 +245,45 @@ def _ocr_with_tesseract_cli(img, lang: str, psm: int) -> OCRResult | None:
     return OCRResult(text=txt, confidence=0.0)
 
 
-def ocr_title_from_frame(frame, lang: str = "jpn+eng", psm: int = 7) -> str:
+def _ocr_with_easyocr(img, lang: str) -> OCRResult | None:
+    try:
+        reader = _get_easyocr_reader(lang)
+    except Exception:
+        return None
+    try:
+        arr = reader.readtext(img, detail=1, paragraph=False)
+    except Exception:
+        return None
+    if not arr:
+        return OCRResult(text="", confidence=0.0)
+    texts: list[str] = []
+    confs: list[float] = []
+    for item in arr:
+        if len(item) < 3:
+            continue
+        txt = str(item[1]).strip()
+        try:
+            conf = float(item[2])
+        except Exception:
+            conf = 0.0
+        if txt:
+            texts.append(txt)
+            confs.append(conf)
+    if not texts:
+        return OCRResult(text="", confidence=0.0)
+    return OCRResult(text="\n".join(texts), confidence=float(np.mean(confs) * 100.0))
+
+
+def ocr_title_from_frame(frame, lang: str = "jpn+eng", psm: int = 7, backend: str = "tesseract") -> str:
     langs = [lang]
     langs = list(dict.fromkeys(langs))
     if lang == "eng":
         psms = list(dict.fromkeys([int(psm), 7, 11]))
     else:
         psms = [int(psm)]
+    backend = str(backend).strip().lower()
+    if backend not in {"tesseract", "easyocr"}:
+        raise ValueError(f"未知のtitle OCR backendです: {backend}")
 
     best_text = "NO TITLE"
     best_score = -1.0
@@ -221,8 +291,9 @@ def ocr_title_from_frame(frame, lang: str = "jpn+eng", psm: int = 7) -> str:
         for img in _preprocess_variants(roi):
             for lg in langs:
                 for p in psms:
-                    res = _ocr_with_pytesseract(img, lang=lg, psm=p)
-                    if res is None:
+                    if backend == "easyocr":
+                        res = _ocr_with_easyocr(img, lang=lg)
+                    else:
                         res = _ocr_with_tesseract_cli(img, lang=lg, psm=p)
                     if res is None:
                         continue
@@ -243,6 +314,7 @@ def ocr_title_from_video(
     frame_offset_sec: float = 0.8,
     lang: str = "jpn+eng",
     psm: int = 7,
+    backend: str = "tesseract",
 ) -> tuple[str, float, np.ndarray | None]:
     probe_offsets = [-0.5, -0.2, 0.2, 0.8, 1.4]
     best_text = "NO TITLE"
@@ -258,7 +330,7 @@ def ocr_title_from_video(
         if lang != "eng":
             langs.append("eng")
         for lg in langs:
-            txt = ocr_title_from_frame(frame, lang=lg, psm=psm)
+            txt = ocr_title_from_frame(frame, lang=lg, psm=psm, backend=backend)
             q = _text_quality(txt)
             if q > best_q:
                 best_q = q
@@ -286,6 +358,7 @@ def extract_titles_for_ranges(
     frame_offset_sec: float = 0.8,
     lang: str = "jpn+eng",
     psm: int = 7,
+    backend: str = "tesseract",
 ) -> list[tuple[str, str]]:
     out_dir = Path(frames_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -298,6 +371,7 @@ def extract_titles_for_ranges(
             frame_offset_sec=float(frame_offset_sec),
             lang=lang,
             psm=psm,
+            backend=backend,
         )
         if frame is None:
             pairs.append((label, "NO TITLE"))
@@ -314,6 +388,7 @@ def extract_titles_for_files(
     frame_offset_sec: float = 0.8,
     lang: str = "jpn+eng",
     psm: int = 7,
+    backend: str = "tesseract",
 ) -> list[tuple[str, str]]:
     out_dir = Path(frames_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -325,6 +400,7 @@ def extract_titles_for_files(
             frame_offset_sec=float(frame_offset_sec),
             lang=lang,
             psm=psm,
+            backend=backend,
         )
         if frame is None:
             pairs.append((p.name, "NO TITLE"))

@@ -1,0 +1,5 @@
+dataset	backend	count	elapsed_sec	note
+split_mov_20260323_titlecheck_OP1_1_v3	tesseract	12	17.361	
+split_mov_20260323_titlecheck_OP1_1_v3	easyocr	12	206.509	
+split_mov_20260323_titles_013713	tesseract	14	22.492	
+split_mov_20260323_titles_013713	easyocr	14	206.968	

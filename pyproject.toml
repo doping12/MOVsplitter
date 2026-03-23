@@ -17,6 +17,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ocr = [
+  "easyocr>=1.7",
+]
 ai = [
   "onnxruntime>=1.17",
 ]

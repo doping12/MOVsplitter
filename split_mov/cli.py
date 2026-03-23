@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title-frame-offset-sec", type=float, default=0.8, help="タイトルOCRに使うフレーム時刻オフセット(秒)")
     p.add_argument("--title-ocr-lang", default="jpn+eng", help="OCR言語")
     p.add_argument("--title-ocr-psm", type=int, default=7, help="OCR PSM")
+    p.add_argument("--title-ocr-backend", choices=["tesseract", "easyocr"], default="tesseract", help="タイトルOCRバックエンド")
     p.add_argument("--parallel", type=int, default=1, help="切り出し並列数（CPU/IO並列）")
     p.add_argument("--config", default=None, help="YAML/JSON設定ファイル")
     p.add_argument("--min-segment-sec", type=float, default=None)
@@ -115,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
             frame_offset_sec=float(args.title_frame_offset_sec),
             lang=str(args.title_ocr_lang),
             psm=int(args.title_ocr_psm),
+            backend=str(args.title_ocr_backend),
         )
         write_title_pairs(titles_out, pairs)
         print(f"title_frames_dir: {frames_dir}")
@@ -191,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
                 frame_offset_sec=float(args.title_frame_offset_sec),
                 lang=str(args.title_ocr_lang),
                 psm=int(args.title_ocr_psm),
+                backend=str(args.title_ocr_backend),
             )
             write_title_pairs(titles_out, pairs)
             print(f"title_frames_dir: {frames_dir}")
@@ -309,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             frame_offset_sec=float(args.title_frame_offset_sec),
             lang=str(args.title_ocr_lang),
             psm=int(args.title_ocr_psm),
+            backend=str(args.title_ocr_backend),
         )
         write_title_pairs(titles_out, pairs)
         print(f"title_frames_dir: {frames_dir}")
