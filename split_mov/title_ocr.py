@@ -145,6 +145,7 @@ def _normalize_known_title(text: str) -> str:
 def _text_quality(text: str) -> float:
     if text == "NO TITLE":
         return -1e9
+    norm = _normalize_known_title(text)
     low = text.lower()
     if _is_credit_text(text):
         return -1e8
@@ -155,12 +156,17 @@ def _text_quality(text: str) -> float:
     if "supa" in low or "orca" in low:
         base -= 40.0
     if re.search(r"brand\s*new!?", low):
-        base += 18.0
+        base += 40.0
     if "熱情" in text or "エナモラル" in text:
-        base += 24.0
+        base += 50.0
+    if norm in {"Brand New!", "熱情エナモラル"}:
+        base += 220.0
     symbols = len(re.findall(r"[`~^_=|/\\<>]", text))
-    base -= symbols * 3.0
-    return base - max(0, len(text) - 40) * 0.8
+    base -= symbols * 5.0
+    token_count = len([x for x in re.split(r"\s+", text.strip()) if x])
+    if token_count > 6:
+        base -= (token_count - 6) * 12.0
+    return base - max(0, len(text) - 28) * 2.0
 
 
 def _ocr_with_pytesseract(img, lang: str, psm: int) -> OCRResult | None:

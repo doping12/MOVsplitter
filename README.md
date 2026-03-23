@@ -18,6 +18,10 @@ Codexに全部書かせたので処理ほとんど把握してないです。
 - 依存ライブラリ: `opencv-python`, `numpy`, `scikit-image`, `PyYAML`, `matplotlib`
 - 検証OS: macOS 15.7.3 のみ
 
+### タイトル自動取得を使う場合の追加依存関係
+- `tesseract` コマンド
+  - macOS: `brew install tesseract tesseract-lang`
+
 ## インストール
 ```bash
 git clone MOVsplitter
@@ -62,6 +66,33 @@ python -m split_mov \
 ```
 
 cut_table.csvを使えば調整できます。
+
+### タイトルを自動取得する場合
+#### 1. フレーム読み取り時（解析のみ）にタイトルを出力
+```bash
+python -m split_mov \
+  "/Users/ykmbp/Workspace/git/MOVsplitter/testdata/movie.mp4" \
+  --visualize-only \
+  --extract-titles
+```
+
+#### 2. 分割時にタイトルを同時出力
+```bash
+python -m split_mov \
+  "/Users/ykmbp/Workspace/git/MOVsplitter/testdata/movie.mp4" \
+  --extract-titles
+```
+
+#### 3. 分割後の動画ディレクトリに対してタイトル一覧を作成
+```bash
+python -m split_mov \
+  --titles-from-dir "/Users/ykmbp/Workspace/git/MOVsplitter/split_mov_YYYYMMDD_HHMMSS" \
+  --titles-output "/Users/ykmbp/Workspace/git/MOVsplitter/split_mov_YYYYMMDD_HHMMSS/titles.tsv"
+```
+
+タイトル取得時の主な出力:
+- `title_frames/*.jpg`（OCRに使ったフレーム）
+- `titles_pre.txt` / `titles.tsv`（`name<TAB>title` 形式）
 
 ## 出力
 `--output-dir`未指定時は、カレント配下に`split_mov_YYYYMMDD_HHMMSS/`を作成して出力します。
@@ -159,6 +190,12 @@ config用のYAMLを書き換えて調整します。
 - `--build-cut-table-from-dir`: `check_frames`から`cut_table.csv`を作成
 - `--cut-table`: 指定CSVの区間で切り出し実行
 - `--cut-table-out`: `cut_table.csv`の出力先
+- `--titles-from-dir`: 動画ファイル群からタイトルOCR一覧を作成
+- `--extract-titles`: 分割前動画のkeep区間に対応するタイトルOCR一覧を作成
+- `--titles-output`: タイトルOCR結果の出力先
+- `--title-frame-offset-sec`: タイトルOCRに使う基準時刻オフセット秒
+- `--title-ocr-lang`: OCR言語（例: `jpn+eng`, `eng`）
+- `--title-ocr-psm`: OCRのPSM指定
 - `--parallel`: 切り出し並列数
 - `--config`: 設定YAML/JSONのパス
 - `--min-segment-sec`: `min_segment_sec`をCLIから一時上書き
