@@ -34,10 +34,8 @@ def _title_roi(frame):
 def _title_rois(frame) -> list[np.ndarray]:
     h, w = frame.shape[:2]
     boxes = [
-        (0.18, 0.82, 0.18, 0.46),
         (0.22, 0.78, 0.34, 0.66),
-        (0.18, 0.82, 0.42, 0.78),
-        (0.28, 0.72, 0.36, 0.62),
+        (0.18, 0.82, 0.40, 0.76),
     ]
     out: list[np.ndarray] = []
     for x1r, x2r, y1r, y2r in boxes:
@@ -60,9 +58,6 @@ def _preprocess_variants(roi: np.ndarray) -> list[np.ndarray]:
     variants.append(clahe)
     adap = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 7)
     variants.append(adap)
-    variants.append(cv2.bitwise_not(adap))
-    _, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    variants.append(otsu)
     unique: list[np.ndarray] = []
     seen: set[bytes] = set()
     for v in variants:
@@ -165,16 +160,8 @@ def _text_quality(text: str) -> float:
 
 
 def _ocr_with_pytesseract(img, lang: str, psm: int) -> OCRResult | None:
-    try:
-        import pytesseract
-    except Exception:
-        return None
-    cfg = f"--psm {int(psm)} --oem 3"
-    try:
-        txt = pytesseract.image_to_string(img, lang=lang, config=cfg)
-    except Exception:
-        return None
-    return OCRResult(text=txt, confidence=0.0)
+    # 安定性優先: CLI版tesseractを使用するため、pytesseract経由は無効化
+    return None
 
 
 def _ocr_with_tesseract_cli(img, lang: str, psm: int) -> OCRResult | None:
@@ -212,10 +199,8 @@ def _ocr_with_tesseract_cli(img, lang: str, psm: int) -> OCRResult | None:
 
 def ocr_title_from_frame(frame, lang: str = "jpn+eng", psm: int = 7) -> str:
     langs = [lang]
-    if lang == "jpn+eng":
-        langs.extend(["jpn", "eng"])
     langs = list(dict.fromkeys(langs))
-    psms = list(dict.fromkeys([int(psm), 7]))
+    psms = [int(psm)]
 
     best_text = "NO TITLE"
     best_score = -1.0
