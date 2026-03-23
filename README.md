@@ -21,7 +21,7 @@ Codexに全部書かせたので処理ほとんど把握してないです。
 ### タイトル自動取得を使う場合の追加依存関係
 - `tesseract` コマンド
   - macOS: `brew install tesseract tesseract-lang`
-
+  - pytesseract
 ## インストール
 ```bash
 git clone MOVsplitter
