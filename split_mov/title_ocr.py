@@ -58,6 +58,7 @@ def _preprocess_variants(roi: np.ndarray) -> list[np.ndarray]:
     variants.append(clahe)
     adap = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 7)
     variants.append(adap)
+    variants.append(cv2.bitwise_not(adap))
     unique: list[np.ndarray] = []
     seen: set[bytes] = set()
     for v in variants:
@@ -129,10 +130,13 @@ def _clean_ocr_text(text: str) -> str:
 def _normalize_known_title(text: str) -> str:
     t = text.strip()
     low = t.lower()
-    if re.search(r"brand\s*new!?", low):
+    low_alpha = re.sub(r"[^a-z]", "", low)
+    if re.search(r"brand\s*new!?", low) or "brandnew" in low_alpha:
         return "Brand New!"
     if re.search(r"brandi?ne?w!?", low):
         return "Brand New!"
+    if "情エナモラル" in t:
+        return "熱情エナモラル"
     if "熱" in t and "情" in t and ("エ" in t or "ナ" in t or "モ" in t):
         return "熱情エナモラル"
     return t
@@ -200,7 +204,10 @@ def _ocr_with_tesseract_cli(img, lang: str, psm: int) -> OCRResult | None:
 def ocr_title_from_frame(frame, lang: str = "jpn+eng", psm: int = 7) -> str:
     langs = [lang]
     langs = list(dict.fromkeys(langs))
-    psms = [int(psm)]
+    if lang == "eng":
+        psms = list(dict.fromkeys([int(psm), 7, 11]))
+    else:
+        psms = [int(psm)]
 
     best_text = "NO TITLE"
     best_score = -1.0
@@ -231,7 +238,7 @@ def ocr_title_from_video(
     lang: str = "jpn+eng",
     psm: int = 7,
 ) -> tuple[str, float, np.ndarray | None]:
-    probe_offsets = [0.2, 0.8, 1.4, 2.0]
+    probe_offsets = [-0.5, -0.2, 0.2, 0.8, 1.4]
     best_text = "NO TITLE"
     best_q = -1e9
     best_t = max(0.0, float(base_sec) + max(0.0, float(frame_offset_sec)))
@@ -241,13 +248,17 @@ def ocr_title_from_video(
         frame = _capture_frame(video_path, t)
         if frame is None:
             continue
-        txt = ocr_title_from_frame(frame, lang=lang, psm=psm)
-        q = _text_quality(txt)
-        if q > best_q:
-            best_q = q
-            best_text = txt
-            best_t = t
-            best_frame = frame
+        langs = [lang]
+        if lang != "eng":
+            langs.append("eng")
+        for lg in langs:
+            txt = ocr_title_from_frame(frame, lang=lg, psm=psm)
+            q = _text_quality(txt)
+            if q > best_q:
+                best_q = q
+                best_text = txt
+                best_t = t
+                best_frame = frame
     return best_text, best_t, best_frame
 
 
