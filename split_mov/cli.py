@@ -16,6 +16,7 @@ from .detect import detect_loading_ranges
 from .ffmpeg_utils import split_video_ranges
 from .report import build_report, write_preview_csv, write_report_json
 from .segment import build_output_ranges
+from .title_ocr import extract_titles_for_files, extract_titles_for_ranges, write_title_pairs
 from .utils import detect_output_ext, is_supported_input, output_path_for_index
 from .visualize import (
     export_boundary_score_timeline_txt,
@@ -34,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--build-cut-table-from-dir", default=None, help="JPEG確認済みディレクトリから切り出し表を作成（フロー1）")
     p.add_argument("--cut-table", default=None, help="切り出し表CSVを使って分割（フロー2）")
     p.add_argument("--cut-table-out", default=None, help="フロー1で作るCSVの出力先")
+    p.add_argument("--titles-from-dir", default=None, help="動画ファイル群からタイトルOCR一覧を作成")
+    p.add_argument("--extract-titles", action="store_true", help="分割前動画のkeep区間に対応するタイトルOCR一覧を作成")
+    p.add_argument("--titles-output", default="titles.txt", help="タイトルOCR結果の2カラム出力先")
+    p.add_argument("--title-frame-offset-sec", type=float, default=0.8, help="タイトルOCRに使うフレーム時刻オフセット(秒)")
+    p.add_argument("--title-ocr-lang", default="jpn+eng", help="OCR言語")
+    p.add_argument("--title-ocr-psm", type=int, default=7, help="OCR PSM")
     p.add_argument("--parallel", type=int, default=1, help="切り出し並列数（CPU/IO並列）")
     p.add_argument("--config", default=None, help="YAML/JSON設定ファイル")
     p.add_argument("--min-segment-sec", type=float, default=None)
@@ -90,6 +97,32 @@ def main(argv: list[str] | None = None) -> int:
         base = output_dir
         return (base / p).resolve()
 
+    if args.titles_from_dir:
+        src_dir = Path(args.titles_from_dir).expanduser().resolve()
+        if not src_dir.exists():
+            raise FileNotFoundError(f"titles-from-dir が存在しません: {src_dir}")
+        files = sorted(
+            [p for p in src_dir.iterdir() if p.is_file() and p.suffix.lower() in {".mp4", ".mov"}],
+            key=lambda x: x.name.lower(),
+        )
+        if not files:
+            raise RuntimeError(f"動画ファイル(.mp4/.mov)が見つかりません: {src_dir}")
+        titles_out = _resolve_optional_output_path(args.titles_output) or (output_dir / "titles.txt")
+        frames_dir = output_dir / "title_frames"
+        pairs = extract_titles_for_files(
+            files=files,
+            frames_dir=frames_dir,
+            frame_offset_sec=float(args.title_frame_offset_sec),
+            lang=str(args.title_ocr_lang),
+            psm=int(args.title_ocr_psm),
+        )
+        write_title_pairs(titles_out, pairs)
+        print(f"title_frames_dir: {frames_dir}")
+        print(f"titles_output: {titles_out}")
+        for k, v in pairs:
+            print(f"{k}\t{v}")
+        return 0
+
     # フロー1: JPEG確認済みディレクトリ -> 切り出し表CSV
     if args.build_cut_table_from_dir:
         checked_dir = Path(args.build_cut_table_from_dir).expanduser().resolve()
@@ -145,6 +178,23 @@ def main(argv: list[str] | None = None) -> int:
         print("planned_output_files:")
         for pth in planned_files:
             print(f"  - {pth}")
+
+        if args.extract_titles:
+            titles_out = _resolve_optional_output_path(args.titles_output) or (output_dir / "titles.txt")
+            frames_dir = output_dir / "title_frames"
+            labels = [p.name for p in planned_files]
+            pairs = extract_titles_for_ranges(
+                video_path=input_path,
+                ranges=keep_ranges,
+                labels=labels,
+                frames_dir=frames_dir,
+                frame_offset_sec=float(args.title_frame_offset_sec),
+                lang=str(args.title_ocr_lang),
+                psm=int(args.title_ocr_psm),
+            )
+            write_title_pairs(titles_out, pairs)
+            print(f"title_frames_dir: {frames_dir}")
+            print(f"titles_output: {titles_out}")
 
         if args.dry_run or args.visualize_only:
             return 0
@@ -246,6 +296,23 @@ def main(argv: list[str] | None = None) -> int:
     print("planned_output_files:")
     for pth in planned_files:
         print(f"  - {pth}")
+
+    if args.extract_titles:
+        titles_out = _resolve_optional_output_path(args.titles_output) or (output_dir / "titles.txt")
+        frames_dir = output_dir / "title_frames"
+        labels = [p.name for p in planned_files]
+        pairs = extract_titles_for_ranges(
+            video_path=input_path,
+            ranges=output_ranges,
+            labels=labels,
+            frames_dir=frames_dir,
+            frame_offset_sec=float(args.title_frame_offset_sec),
+            lang=str(args.title_ocr_lang),
+            psm=int(args.title_ocr_psm),
+        )
+        write_title_pairs(titles_out, pairs)
+        print(f"title_frames_dir: {frames_dir}")
+        print(f"titles_output: {titles_out}")
 
     skip_split = args.dry_run or args.visualize_only
     export_check_png(check_png_path, detection, output_ranges)
